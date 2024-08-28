@@ -32,7 +32,7 @@ function App() {
         setTimeout(() => {
           setCurrentBatch((prevBatch) => prevBatch.slice(1));
         }, 12000);
-      }, 1000); // Add each attack every 1.5 seconds
+      }, 800); // Add each attack every 1.5 seconds
 
       return () => clearTimeout(timer);
     }
@@ -98,8 +98,8 @@ function App() {
         <directionalLight position={[10, 10, 5]} />
         <OrbitControls
   enableZoom={true}
-  minDistance={6500}
-  maxDistance={9000}
+  minDistance={2500}
+  maxDistance={11000}
   rotateSpeed={0.4}
   maxPolarAngle={Math.PI / 2} // Prevent zooming below the globe
 />

@@ -1,52 +1,37 @@
 // AttackLines.js
-import React from 'react';
-import { CatmullRomCurve3, Vector3 } from 'three';
-import { Line } from '@react-three/drei';
+import React, { useMemo } from 'react';
+import { CatmullRomCurve3, Vector3, TubeGeometry, MeshBasicMaterial, Mesh } from 'three';
+import { extend, useFrame } from '@react-three/fiber';
+
+extend({ Mesh });
 
 const AttackLines = ({ attackData }) => {
-  const renderLines = () => {
-    return attackData.map((attack, index) => {
-      const color = getAttackColor(attack.type);
 
-      // Convert lat/lng to 3D coordinates
-      const sourceCoords = latLngToCartesian(attack.sourceCoords[0], attack.sourceCoords[1]);
-      const destinationCoords = latLngToCartesian(attack.destinationCoords[0], attack.destinationCoords[1]);
+  // Convert latitude and longitude to 3D Cartesian coordinates
+  const latLngToCartesian = (lat, lng, radius = 5000) => {
+    const phi = (90 - lat) * (Math.PI / 180);
+    const theta = (lng + 180) * (Math.PI / 180);
 
-      // calculate the distance between the source and destination
-      let tempDistance  = getDistance(attack.sourceCoords, attack.destinationCoords);
+    const x = -(radius * Math.sin(phi) * Math.cos(theta));
+    const z = radius * Math.sin(phi) * Math.sin(theta);
+    const y = radius * Math.cos(phi);
 
-      tempDistance = tempDistance / (10000); // Adjust to control the curve
-      console.log("temp",tempDistance);
+    return new Vector3(x, y, z);
+  };
 
-      if (tempDistance < 0.5) {
-        tempDistance = 0.6;
-      }
-
-      // Calculate the mid-point control position on the curve
-      const midPoint = new Vector3()
-        .addVectors(sourceCoords, destinationCoords)
-        .multiplyScalar(tempDistance); // Adjust to control arc height
-
-      // Move the mid-point outwards for better curvature
-      midPoint.setLength((midPoint.length() + tempDistance)/1); // Adjust 50 to control the curve
-
-      // Create a curved path using CatmullRomCurve3
-      const curve = new CatmullRomCurve3([sourceCoords, midPoint, destinationCoords]);
-
-      const points = curve.getPoints(50); // Get 50 points along the curve
-
-      return (
-        <Line
-          key={index}
-          points={points}
-          color={color}
-          lineWidth={5}
-          dashed
-          dashSize={5} // Adjust to control dash size
-          gapSize={3} // Adjust to control gap between dashes
-        />
-      );
-    });
+  const getAttackColor = (type) => {
+    switch (type) {
+      case 'webAttackers':
+        return 'red';
+      case 'scanners':
+        return 'blue';
+      case 'intruders':
+        return 'green';
+      case 'ioTBotnets':
+        return 'orange';
+      default:
+        return 'purple';
+    }
   };
 
   const getDistance = (source, destination) => {
@@ -65,39 +50,57 @@ const AttackLines = ({ attackData }) => {
     const d = R * c; // Distance in km
     return d;
   };
-  const getAttackColor = (type) => {
-    switch (type) {
-      case 'webAttackers':
-        return 'red';
-      case 'scanners':
-        return 'blue';
-      case 'intruders':
-        return 'green';
-      case 'ioTBotnets':
-        return 'orange';
-      default:
-        return 'purple';
-    }
-  };
+
+  const lines = useMemo(() => {
+    return attackData.map((attack) => {
+      const color = getAttackColor(attack.type);
+
+      // Convert lat/lng to 3D coordinates
+      const sourceCoords = latLngToCartesian(attack.sourceCoords[0], attack.sourceCoords[1]);
+      const destinationCoords = latLngToCartesian(attack.destinationCoords[0], attack.destinationCoords[1]);
+
+      // calculate the distance between the source and destination
+      let tempDistance = getDistance(attack.sourceCoords, attack.destinationCoords);
+      tempDistance = tempDistance / 10000; // Adjust to control the curve
+
+      if (tempDistance < 0.5) {
+        tempDistance = 0.6;
+      }
+
+      // Calculate the mid-point control position on the curve
+      const midPoint = new Vector3()
+        .addVectors(sourceCoords, destinationCoords)
+        .multiplyScalar(tempDistance*10000); // Adjust to control arc height
+
+      // Move the mid-point outwards for better curvature
+      midPoint.setLength((midPoint.length() + tempDistance) / 10000); // Adjust 50 to control the curve
+
+      // Create a curved path using CatmullRomCurve3
+      const curve = new CatmullRomCurve3([sourceCoords, midPoint, destinationCoords]);
+
+      // TubeGeometry for a smoother line
+      const tubeGeometry = new TubeGeometry(curve, 64, 15.5, 8, false);
+
+      // Mesh for the tube
+      const material = new MeshBasicMaterial({ color });
+      const mesh = new Mesh(tubeGeometry, material);
+
+      return mesh;
+    });
+  }, [attackData]);
+
+  useFrame(() => {
+    // Optional: Animation logic to move the lines or create a pulsing effect
+  });
+
+  
 
   // Converts degrees to radians
-function deg2rad(degrees) {
-  return degrees * (Math.PI / 180);
-}
+  function deg2rad(degrees) {
+    return degrees * (Math.PI / 180);
+  }
 
-  // Convert latitude and longitude to 3D Cartesian coordinates
-  const latLngToCartesian = (lat, lng, radius = 5000) => {
-    const phi = (90 - lat) * (Math.PI / 180);
-    const theta = (lng + 180) * (Math.PI / 180);
-
-    const x = -(radius * Math.sin(phi) * Math.cos(theta));
-    const z = radius * Math.sin(phi) * Math.sin(theta);
-    const y = radius * Math.cos(phi);
-
-    return new Vector3(x, y, z);
-  };
-
-  return <group>{renderLines()}</group>;
+  return <group>{lines.map((line, index) => <primitive key={index} object={line} />)}</group>;
 };
 
 export default AttackLines;
