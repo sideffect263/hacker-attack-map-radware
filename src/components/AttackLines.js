@@ -28,7 +28,7 @@ const AttackLines = ({ attackData }) => {
         .multiplyScalar(tempDistance); // Adjust to control arc height
 
       // Move the mid-point outwards for better curvature
-      midPoint.setLength(midPoint.length() + tempDistance); // Adjust 50 to control the curve
+      midPoint.setLength((midPoint.length() + tempDistance)/1); // Adjust 50 to control the curve
 
       // Create a curved path using CatmullRomCurve3
       const curve = new CatmullRomCurve3([sourceCoords, midPoint, destinationCoords]);

@@ -31,7 +31,7 @@ function App() {
         // Remove the oldest lines after 15 seconds to keep the map clean
         setTimeout(() => {
           setCurrentBatch((prevBatch) => prevBatch.slice(1));
-        }, 15000);
+        }, 12000);
       }, 1000); // Add each attack every 1.5 seconds
 
       return () => clearTimeout(timer);
