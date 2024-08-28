@@ -87,22 +87,22 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Live Threat Map in 3D</h1>
+        <h1><a href="https://livethreatmap.radware.com/" style={{ textDecoration: 'none', color: 'inherit' }}>Live Threat Map in 3D</a></h1>
       </header>
       <Canvas
-      camera={{
-        far: 10000,
-      }}
-      style={{ height: '80vh', width: '100%', position:'absolute', top:"10%" }}>
+        camera={{
+          far: 10000,
+        }}
+        style={{ height: '80vh', width: '100%', position: 'absolute', top: "10%" }}
+      >
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} />
         <OrbitControls
-  enableZoom={true}
-  minDistance={2500}
-  maxDistance={11000}
-  rotateSpeed={0.4}
-  maxPolarAngle={Math.PI / 2} // Prevent zooming below the globe
-/>
+          enableZoom={true}
+          minDistance={5000}
+          maxDistance={13000}
+          rotateSpeed={0.4}
+        />
 
         <Globe />
         <AttackLines attackData={currentBatch} />

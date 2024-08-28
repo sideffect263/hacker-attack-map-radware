@@ -1,13 +1,10 @@
-// AttackLines.js
 import React, { useMemo } from 'react';
-import { CatmullRomCurve3, Vector3, TubeGeometry, MeshBasicMaterial, Mesh } from 'three';
-import { extend, useFrame } from '@react-three/fiber';
-
-extend({ Mesh });
+import { CatmullRomCurve3, Vector3, TubeGeometry, ShaderMaterial, Mesh } from 'three';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 
 const AttackLines = ({ attackData }) => {
 
-  // Convert latitude and longitude to 3D Cartesian coordinates
   const latLngToCartesian = (lat, lng, radius = 5000) => {
     const phi = (90 - lat) * (Math.PI / 180);
     const theta = (lng + 180) * (Math.PI / 180);
@@ -22,15 +19,15 @@ const AttackLines = ({ attackData }) => {
   const getAttackColor = (type) => {
     switch (type) {
       case 'webAttackers':
-        return 'red';
+        return '#7400b8';
       case 'scanners':
-        return 'blue';
+        return '#5e60ce';
       case 'intruders':
-        return 'green';
+        return '#48bfe3';
       case 'ioTBotnets':
-        return 'orange';
+        return '#80ffdb';
       default:
-        return 'purple';
+        return '#fdffb6';
     }
   };
 
@@ -40,14 +37,14 @@ const AttackLines = ({ attackData }) => {
     const lat2 = destination[0];
     const lon2 = destination[1];
 
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1); // deg2rad below
+    const R = 6371;
+    const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const d = R * c; // Distance in km
+    const d = R * c;
     return d;
   };
 
@@ -55,52 +52,68 @@ const AttackLines = ({ attackData }) => {
     return attackData.map((attack) => {
       const color = getAttackColor(attack.type);
 
-      // Convert lat/lng to 3D coordinates
       const sourceCoords = latLngToCartesian(attack.sourceCoords[0], attack.sourceCoords[1]);
       const destinationCoords = latLngToCartesian(attack.destinationCoords[0], attack.destinationCoords[1]);
 
-      // calculate the distance between the source and destination
       let tempDistance = getDistance(attack.sourceCoords, attack.destinationCoords);
-      tempDistance = tempDistance / 10000; // Adjust to control the curve
+      tempDistance = tempDistance / 10000;
 
       if (tempDistance < 0.5) {
         tempDistance = 0.6;
       }
 
-      // Calculate the mid-point control position on the curve
       const midPoint = new Vector3()
         .addVectors(sourceCoords, destinationCoords)
-        .multiplyScalar(tempDistance*10000); // Adjust to control arc height
+        .multiplyScalar(tempDistance * 10000); // Adjust to control arc height
 
-      // Move the mid-point outwards for better curvature
-      midPoint.setLength((midPoint.length() + tempDistance) / 10000); // Adjust 50 to control the curve
+      midPoint.setLength((midPoint.length() + tempDistance) / 10000);
 
-      // Create a curved path using CatmullRomCurve3
       const curve = new CatmullRomCurve3([sourceCoords, midPoint, destinationCoords]);
 
-      // TubeGeometry for a smoother line
-      const tubeGeometry = new TubeGeometry(curve, 64, 15.5, 8, false);
+      const tubeGeometry = new TubeGeometry(curve, 64, 30.5, 8, false);
 
-      // Mesh for the tube
-      const material = new MeshBasicMaterial({ color });
-      const mesh = new Mesh(tubeGeometry, material);
+      const shaderMaterial = new ShaderMaterial({
+        uniforms: {
+          color: { value: new THREE.Color(color) },
+          time: { value: 0 },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 color;
+          uniform float time;
+          varying vec2 vUv;
+          void main() {
+            float alpha = smoothstep(0.0, 0.1, mod(vUv.x + time, 1.0)) * smoothstep(0.9, 1.0, mod(vUv.x + time, 1.0));
+            gl_FragColor = vec4(color, alpha);
+          }
+        `,
+        transparent: true,
+      });
 
-      return mesh;
+      const mesh = new Mesh(tubeGeometry, shaderMaterial);
+
+      return { mesh, shaderMaterial };
     });
   }, [attackData]);
 
-  useFrame(() => {
-    // Optional: Animation logic to move the lines or create a pulsing effect
+  useFrame(({ clock }) => {
+    const elapsedTime = clock.getElapsedTime();
+    lines.forEach(({ shaderMaterial }) => {
+      shaderMaterial.uniforms.time.value = elapsedTime * 0.5; // Adjust speed of animation
+    });
   });
 
-  
-
-  // Converts degrees to radians
   function deg2rad(degrees) {
     return degrees * (Math.PI / 180);
   }
 
-  return <group>{lines.map((line, index) => <primitive key={index} object={line} />)}</group>;
+  return <group>{lines.map(({ mesh }, index) => <primitive key={index} object={mesh} />)}</group>;
 };
 
 export default AttackLines;
