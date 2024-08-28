@@ -1,77 +1,49 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import axios from 'axios';
 import './App.css';
-import countryCoordinates from './countries.json'; // Import the country coordinates from JSON
+import countryCoordinates from './countries.json';
 
 function App() {
   const [attackData, setAttackData] = useState([]);
   const [currentBatch, setCurrentBatch] = useState([]);
-  const [lineLifeTime, setLineLifeTime] = useState(1000); // Line visibility duration in ms (e.g., 10 seconds)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await axios.get('https://radware-proxy.onrender.com/api/attacks');
-        const transformedData = await transformData(response.data);
-        console.log('Fetched attack data:', transformedData);
-        setAttackData(transformedData);
-        setCurrentBatch([]); // Reset current batch when new data arrives
-      } catch (error) {
-        console.error('Error fetching attack data:', error);
-      }
+    const ws = new WebSocket('wss://radware-proxy.onrender.com/');
+    console.log('Connecting to WebSocket...');
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const transformedData = transformData(data);
+      console.log('Received data:', transformedData);
+      setAttackData((prevData) => [...prevData, ...transformedData]);
     };
 
-    // Fetch initial data
-    fetchData();
-
-    // Set interval to fetch data every 30 seconds
-    const intervalId = setInterval(fetchData, 30000);
-
-    return () => clearInterval(intervalId);
+    return () => ws.close();
   }, []);
 
   useEffect(() => {
-    console.log('Updating attack data...');
-    console.log('attack data', attackData);
     if (attackData.length > 0) {
       const timer = setTimeout(() => {
-        console.log('Adding new batch of attack data...');
-        const nextBatch = attackData.slice(currentBatch.length, currentBatch.length + 10);
+        const nextBatch = attackData.slice(currentBatch.length, currentBatch.length + 1);
         setCurrentBatch((prevBatch) => [...prevBatch, ...nextBatch]);
-        console.log('Current batch:', currentBatch);
 
-        // Remove the oldest lines after `lineLifeTime` to keep the map clean
+        // Remove the oldest lines after 15 seconds to keep the map clean
         setTimeout(() => {
-          setCurrentBatch((prevBatch) => prevBatch.slice(10));
-        }, lineLifeTime);
-
-        console.log('Next batch:', nextBatch);
-
-      }, 1000); // Add each batch every half a second for smooth rendering
+          setCurrentBatch((prevBatch) => prevBatch.slice(1));
+        }, 15000);
+      }, 1500); // Add each attack every 1.5 seconds
 
       return () => clearTimeout(timer);
     }
-  }, [attackData, currentBatch, lineLifeTime]);
+  }, [attackData, currentBatch]);
 
-  const transformData = async (data) => {
+  const transformData = (data) => {
     const flattenedData = data.flat();
 
     const transformedData = flattenedData.map((item) => {
-
-
-
-      if(!item.sourceCountry || !item.destinationCountry){
-        return null;
-      }
-
       const sourceCoords = getCords(item.sourceCountry);
       const destinationCoords = getCords(item.destinationCountry);
 
-      
-
-      // Skip if either source or destination coordinates are invalid
       if (!isValidCoords(sourceCoords) || !isValidCoords(destinationCoords)) {
         return null;
       }
@@ -99,15 +71,12 @@ function App() {
       return coords;
     } else {
       console.error(`Coordinates not found for country: ${country}`);
-      return [0, 0]; // Return default coordinates if country not found
+      return [0, 0];
     }
   };
 
   const renderAttackLines = () => {
-    console.log('Rendering attack lines...');
     if (currentBatch.length === 0) return null;
-
-    console.log('Current batch:', currentBatch);
 
     return currentBatch.map((attack, index) => {
       const color =
@@ -121,21 +90,23 @@ function App() {
           ? 'orange'
           : 'purple';
 
-      
+      const weight = attack.weight === 'Heavy' ? 5 : attack.weight === 'Medium' ? 3 : 1;
 
-      if (
-        isValidCoords(attack.sourceCoords) &&
-        isValidCoords(attack.destinationCoords) 
-      ) {
-        console.log('Rendering attack:', attack);
-
+      if (isValidCoords(attack.sourceCoords) && isValidCoords(attack.destinationCoords)) {
         return (
           <Polyline
             key={index}
             positions={getGreatCirclePath(attack.sourceCoords, attack.destinationCoords)}
             color={color}
-            weight={3}
+            weight={weight}
             opacity={0.7}
+            pathOptions={{
+              dashArray: '5, 10',
+              animate: {
+                duration: 5,
+                repeat: 1,
+              },
+            }}
           >
             <Popup>
               {attack.sourceCountry} - {attack.destinationCountry} <br />
@@ -150,9 +121,6 @@ function App() {
   };
 
   const getGreatCirclePath = (source, destination) => {
-    console.log('Calculating great circle path...');
-    console.log('Source:', source);
-    console.log('Destination:', destination);
     const latlngs = [];
     const lat1 = (Math.PI / 180) * source[0];
     const lng1 = (Math.PI / 180) * source[1];
