@@ -9,6 +9,7 @@ const Globe = () => {
   const earthTexture = useLoader(TextureLoader, earthTextureImage);
   const globeRef = useRef();
   const bordersRef = useRef();
+  
 
   const radius = 5000;
 

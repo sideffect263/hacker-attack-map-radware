@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { CatmullRomCurve3, Vector3, TubeGeometry, ShaderMaterial, Mesh } from 'three';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 const AttackLines = ({ attackData }) => {
+
+  const globeRef = useRef();
+
 
   const latLngToCartesian = (lat, lng, radius = 5000) => {
     const phi = (90 - lat) * (Math.PI / 180);
@@ -103,6 +106,11 @@ const AttackLines = ({ attackData }) => {
   }, [attackData]);
 
   useFrame(({ clock }) => {
+
+
+    if(globeRef.current) {
+      globeRef.current.rotation.y += 0.0005;
+    }
     const elapsedTime = clock.getElapsedTime();
     lines.forEach(({ shaderMaterial }) => {
       shaderMaterial.uniforms.time.value = elapsedTime * 0.5; // Adjust speed of animation
@@ -113,7 +121,7 @@ const AttackLines = ({ attackData }) => {
     return degrees * (Math.PI / 180);
   }
 
-  return <group>{lines.map(({ mesh }, index) => <primitive key={index} object={mesh} />)}</group>;
+  return <group ref={globeRef}>{lines.map(({ mesh }, index) => <primitive key={index} object={mesh} />)}</group>;
 };
 
 export default AttackLines;
