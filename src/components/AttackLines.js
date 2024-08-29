@@ -19,9 +19,9 @@ const AttackLines = ({ attackData }) => {
   const getAttackColor = (type) => {
     switch (type) {
       case 'webAttackers':
-        return '#7400b8';
+        return '#fcec52';
       case 'scanners':
-        return '#5e60ce';
+        return '#e94f37';
       case 'intruders':
         return '#48bfe3';
       case 'ioTBotnets':

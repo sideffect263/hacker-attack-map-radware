@@ -1,0 +1,48 @@
+/* AttackList.css */
+.attack-list {
+    position: absolute;
+    top: 10%;
+    right: 2%;
+    width: 20%;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  
+  .attack-list h2 {
+    margin-top: 0;
+    font-size: 1.5em;
+    text-align: center;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+  }
+  
+  .attack-list ul {
+    list-style-type: none;
+    padding-left: 0;
+  }
+  
+  .attack-list li {
+    padding: 5px 0;
+    border-bottom: 1px solid #555;
+  }
+  
+  .attack-list li:last-child {
+    border-bottom: none;
+  }
+  
+  .attack-type {
+    font-weight: bold;
+    color: #e74c3c;
+  }
+  
+  .attack-country {
+    font-weight: bold;
+    color: #3498db;
+  }
+  

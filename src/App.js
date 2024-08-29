@@ -4,7 +4,9 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import Globe from './components/Globe';
 import AttackLines from './components/AttackLines';
+import AttackList from './components/AttackList'; // Import the new component
 import './App.css';
+import './components/AttackList'; // Import the styles for the attack list
 import countryCoordinates from './countries.json';
 
 function App() {
@@ -15,7 +17,9 @@ function App() {
     const ws = new WebSocket('wss://radware-proxy.onrender.com/');
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log(data);
       const transformedData = transformData(data);
+      console.log(transformedData);
       setAttackData((prevData) => [...prevData, ...transformedData]);
     };
 
@@ -31,8 +35,8 @@ function App() {
         // Remove the oldest lines after 15 seconds to keep the map clean
         setTimeout(() => {
           setCurrentBatch((prevBatch) => prevBatch.slice(1));
-        }, 12000);
-      }, 800); // Add each attack every 1.5 seconds
+        }, 5000);
+      }, 500); // Add each attack every 1.5 seconds
 
       return () => clearTimeout(timer);
     }
@@ -99,7 +103,7 @@ function App() {
         <directionalLight position={[10, 10, 5]} />
         <OrbitControls
           enableZoom={true}
-          minDistance={5000}
+          minDistance={6000}
           maxDistance={13000}
           rotateSpeed={0.4}
         />
@@ -107,8 +111,12 @@ function App() {
         <Globe />
         <AttackLines attackData={currentBatch} />
       </Canvas>
+      
+      {/* Include the AttackList component */}
+      <AttackList attacks={currentBatch} />
+
       <footer>
-        <p>Powered by Radware</p>
+        <a href='https://livethreatmap.radware.com/' >Powered by Radware</a>
       </footer>
     </div>
   );
