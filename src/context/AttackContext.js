@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import useWebSocketConnection from '../services/WebSocketService';
 import { transformAttackData } from '../utils/dataTransformUtils';
 
@@ -43,6 +43,17 @@ export const AttackProvider = ({ children }) => {
     timeRange: null
   });
 
+  // Use refs to track timeouts for cleanup
+  const timeoutsRef = useRef([]);
+
+  // Clear all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
+  }, []);
+
   // Handle incoming WebSocket messages
   const handleMessage = useCallback((data) => {
     // Update last message time
@@ -64,26 +75,46 @@ export const AttackProvider = ({ children }) => {
 
   // Process attacks for visualization in batches
   useEffect(() => {
-    if (allAttacks.length > 0) {
-      const timer = setTimeout(() => {
-        // Get the next attack that isn't already visible
-        const nextAttack = allAttacks.find(attack => 
-          !visibleAttacks.some(visible => visible.id === attack.id)
-        );
-        
-        if (nextAttack) {
-          setVisibleAttacks(prev => [...prev, nextAttack]);
-          
-          // Schedule removal after CLEANUP_INTERVAL
-          setTimeout(() => {
-            setVisibleAttacks(prev => prev.filter(attack => attack.id !== nextAttack.id));
-          }, CLEANUP_INTERVAL);
-        }
-      }, BATCH_INTERVAL);
+    if (allAttacks.length === 0) return;
+
+    // Find attacks that aren't already visible
+    const newAttacks = allAttacks.filter(attack => 
+      !visibleAttacks.some(visible => visible.id === attack.id)
+    );
+
+    if (newAttacks.length === 0) return;
+
+    // Add one new attack at a time with interval
+    const addNextAttack = () => {
+      const nextAttack = newAttacks.shift();
+      if (!nextAttack) return;
+
+      setVisibleAttacks(prev => [...prev, nextAttack]);
       
-      return () => clearTimeout(timer);
-    }
-  }, [allAttacks, visibleAttacks]);
+      // Schedule removal after CLEANUP_INTERVAL
+      const removalTimeout = setTimeout(() => {
+        setVisibleAttacks(prev => prev.filter(attack => attack.id !== nextAttack.id));
+      }, CLEANUP_INTERVAL);
+      
+      timeoutsRef.current.push(removalTimeout);
+      
+      // Schedule next attack if there are more
+      if (newAttacks.length > 0) {
+        const nextTimeout = setTimeout(addNextAttack, BATCH_INTERVAL);
+        timeoutsRef.current.push(nextTimeout);
+      }
+    };
+
+    // Start the process
+    const initialTimeout = setTimeout(addNextAttack, BATCH_INTERVAL);
+    timeoutsRef.current.push(initialTimeout);
+
+    // Cleanup function
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
+  }, [allAttacks]); // Only depend on allAttacks, not visibleAttacks
 
   // Update statistics whenever allAttacks changes
   useEffect(() => {
@@ -167,8 +198,8 @@ export const AttackProvider = ({ children }) => {
     });
   }, []);
 
-  // Context value
-  const value = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
     allAttacks,
     visibleAttacks: filteredAttacks,
     stats,
@@ -179,7 +210,18 @@ export const AttackProvider = ({ children }) => {
     connectionError: error,
     refreshConnection: refresh,
     lastMessageTime
-  };
+  }), [
+    allAttacks, 
+    filteredAttacks, 
+    stats, 
+    filters, 
+    updateFilters, 
+    clearFilters, 
+    status, 
+    error, 
+    refresh, 
+    lastMessageTime
+  ]);
 
   return (
     <AttackContext.Provider value={value}>

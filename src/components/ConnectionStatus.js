@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { useAttackData } from '../context/AttackContext';
 import '../styles/ConnectionStatus.css';
 
@@ -35,15 +35,15 @@ const ConnectionStatus = () => {
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     if (refreshConnection) {
       refreshConnection();
     }
-  };
+  }, [refreshConnection]);
 
-  const toggleExpanded = () => {
-    setExpanded(!expanded);
-  };
+  const toggleExpanded = useCallback(() => {
+    setExpanded(prevExpanded => !prevExpanded);
+  }, []);
 
   // Format the last message time
   const getLastMessageTime = () => {
@@ -110,4 +110,5 @@ const ConnectionStatus = () => {
   );
 };
 
-export default ConnectionStatus; 
+// Memoize the component to prevent unnecessary re-renders
+export default memo(ConnectionStatus); 

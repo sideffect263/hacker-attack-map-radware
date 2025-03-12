@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import pako from 'pako'; // Add this dependency for decompression
 
-const WEBSOCKET_URL = 'wss://radware-proxy.onrender.com/';
+// Use local server in development, remote in production
+const WEBSOCKET_URL = process.env.NODE_ENV === 'production' 
+  ? 'wss://radware-proxy.onrender.com/' 
+  : 'ws://localhost:3001';
+
 const RECONNECT_DELAY = 3000; // 3 seconds
 const HEARTBEAT_TIMEOUT = 35000; // 35 seconds (slightly longer than server's 30s)
 
@@ -9,11 +13,40 @@ export const useWebSocketConnection = (onMessage) => {
   const [status, setStatus] = useState('disconnected');
   const [error, setError] = useState(null);
   const [lastMessageTime, setLastMessageTime] = useState(0);
+  
+  // Use refs to avoid dependency issues in useCallback
+  const onMessageRef = useRef(onMessage);
+  const lastMessageTimeRef = useRef(lastMessageTime);
+  const wsRef = useRef(null);
+  const heartbeatCheckRef = useRef(null);
+  
+  // Update refs when values change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+  
+  useEffect(() => {
+    lastMessageTimeRef.current = lastMessageTime;
+  }, [lastMessageTime]);
+
+  // Function to request a refresh of data
+  const requestRefresh = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: 'refresh' }));
+    }
+  }, []);
 
   const connect = useCallback(() => {
+    // Don't create a new connection if one already exists and is open or connecting
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || 
+                          wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    
     try {
       setStatus('connecting');
       const ws = new WebSocket(WEBSOCKET_URL);
+      wsRef.current = ws;
       
       // Check if browser supports binary WebSocket
       const supportsBinary = typeof Blob !== 'undefined' && 
@@ -52,7 +85,7 @@ export const useWebSocketConnection = (onMessage) => {
             setError(data.message);
           } else {
             // Process normal data
-            onMessage(data);
+            onMessageRef.current(data);
           }
         } catch (err) {
           console.error('Error processing WebSocket message:', err);
@@ -69,6 +102,13 @@ export const useWebSocketConnection = (onMessage) => {
       ws.onclose = (event) => {
         console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
         setStatus('disconnected');
+        wsRef.current = null;
+        
+        // Clear heartbeat check
+        if (heartbeatCheckRef.current) {
+          clearInterval(heartbeatCheckRef.current);
+          heartbeatCheckRef.current = null;
+        }
         
         // Attempt to reconnect unless the connection was closed cleanly
         if (event.code !== 1000) {
@@ -78,50 +118,45 @@ export const useWebSocketConnection = (onMessage) => {
       };
 
       // Set up heartbeat check
-      const heartbeatCheck = setInterval(() => {
+      if (heartbeatCheckRef.current) {
+        clearInterval(heartbeatCheckRef.current);
+      }
+      
+      heartbeatCheckRef.current = setInterval(() => {
         const now = Date.now();
         // If we haven't received a message in HEARTBEAT_TIMEOUT ms, consider the connection dead
-        if (now - lastMessageTime > HEARTBEAT_TIMEOUT) {
+        if (now - lastMessageTimeRef.current > HEARTBEAT_TIMEOUT) {
           console.log('Heartbeat timeout, reconnecting...');
-          ws.close();
-          clearInterval(heartbeatCheck);
+          if (wsRef.current) {
+            wsRef.current.close();
+          }
         }
       }, HEARTBEAT_TIMEOUT);
 
-      // Function to request a refresh of data
-      const requestRefresh = () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ action: 'refresh' }));
-        }
-      };
-
-      return { 
-        socket: ws, 
-        heartbeatCheck,
-        requestRefresh
-      };
     } catch (err) {
       console.error('Failed to create WebSocket connection:', err);
       setError('Failed to establish connection');
       setStatus('error');
+      wsRef.current = null;
       
       // Attempt to reconnect
       setTimeout(() => connect(), RECONNECT_DELAY);
-      return null;
     }
-  }, [onMessage, lastMessageTime]);
+  }, []); // No dependencies to prevent recreation
 
+  // Connect on mount and clean up on unmount
   useEffect(() => {
-    const connection = connect();
+    connect();
     
     return () => {
-      if (connection) {
-        if (connection.socket) {
-          connection.socket.close(1000, 'Component unmounted');
-        }
-        if (connection.heartbeatCheck) {
-          clearInterval(connection.heartbeatCheck);
-        }
+      if (wsRef.current) {
+        wsRef.current.close(1000, 'Component unmounted');
+        wsRef.current = null;
+      }
+      
+      if (heartbeatCheckRef.current) {
+        clearInterval(heartbeatCheckRef.current);
+        heartbeatCheckRef.current = null;
       }
     };
   }, [connect]);
@@ -130,12 +165,7 @@ export const useWebSocketConnection = (onMessage) => {
   return { 
     status, 
     error,
-    refresh: () => {
-      const connection = connect();
-      if (connection && connection.requestRefresh) {
-        connection.requestRefresh();
-      }
-    }
+    refresh: requestRefresh
   };
 };
 
